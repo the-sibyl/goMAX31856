@@ -108,8 +108,12 @@ func getTemp(dev *spi.Device) {
 	}, readValue)
 
 	// Discard the first byte, save the rest, and shift them to their proper positions
-	var temp := uint32(readValue[1]) << 16 | uint32(readValue[2]) << 8 | uint32(readValue[3])
+	//temp := int32(readValue[1]) << 16 | int32(readValue[2]) << 8 | int32(readValue[3])
+	temp := int16(readValue[1]) << 8 | int16(readValue[2])
+	linearTempDegC := float32(temp) * 0.0625
+	fmt.Println("Processed temperature:", linearTempDegC)
 
+	// Note: from the datasheet, the output looks like two's complement. Check to be sure that the signed math works out. Extend the sign out to 32 bits if necessary.
 	fmt.Println(readValue)
 	fmt.Println(temp)
 
