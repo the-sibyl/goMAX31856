@@ -27,7 +27,6 @@ package main
 import (
 	"fmt"
 	"time"
-//	"golang.org/x/exp/io/spi"
 	"github.com/the-sibyl/piSPI"
 )
 
@@ -47,51 +46,71 @@ func main() {
 
 	defer dev.Close()
 
-//	fmt.Println(dev.SetMaxSpeed(7629))
+	dev.SetCSChange(false)
+	time.Sleep(time.Millisecond * 200)
 
-//	dev.SetBitOrder(spi.LSBFirst)
-//	dev.SetBitsPerWord(8)
 
-/*
+	//readValue := make([]byte, 2)
+
 	err = dev.Tx([]byte{
-//		0x80, 0b10010000
-		0x80, 0x90,
-	//	0x82, 0x00,
+		0x80, 0xB4,
 	}, nil)
 
 	if err != nil {
 		panic(err)
 	}
-*/
 
-	time.Sleep(time.Millisecond * 200)
+	err = dev.Tx([]byte{
+		0x82, 0x0,
+	}, nil)
 
-
-	readValue := make([]byte, 2)
-
-	dev.SetCSChange(false)
-
-	for {
-/*
-//		dev.SetCSChange(true)
-		dev.Tx([]byte{
-		0x80, 0x99,
-		}, readValue)
-
-		fmt.Println("Write,", readValue)
-
-*/
-		time.Sleep(time.Millisecond * 100)
-//		dev.SetCSChange(false)
-
-		dev.Tx([]byte{
-		0x01, 0x0,
-		}, readValue)
-
-		fmt.Println("Read,", readValue)
-
-		time.Sleep(time.Millisecond * 100)
-
-
+	if err != nil {
+		panic(err)
 	}
+
+	getTemp(dev)
+
+}
+
+type MAX31856 struct {
+	spidevPath string
+	spiClockSpeed int
+}
+
+// Add functionality for DRDY pin
+func (m *MAX31856) Setup() {
+
+}
+
+// Reset the faults register
+func (m *MAX31856) ResetFaults() {
+
+}
+
+// Intended to be placed into a Goroutine
+// Singleton behavior
+func (m *MAX31856) GetTempAuto() {
+
+}
+
+// Intended to be called once per measurement
+func (m *MAX31856) GetTempOnce() {
+
+}
+
+func getTemp(dev *spi.Device) {
+
+	readValue := make([]byte, 4)
+
+	// Read 0xC, 0xD, 0xE. The address auto-increments on the chip.
+	dev.Tx([]byte{
+	0xC, 0x0, 0x0, 0x0,
+	}, readValue)
+
+	// Discard the first byte, save the rest, and shift them to their proper positions
+	var temp := uint32(readValue[1]) << 16 | uint32(readValue[2]) << 8 | uint32(readValue[3])
+
+	fmt.Println(readValue)
+	fmt.Println(temp)
+
 }
