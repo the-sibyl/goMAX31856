@@ -58,8 +58,12 @@ func Setup(spidevPath string, spiClockSpeed int64) (MAX31856, error) {
 
 	m.dev = dev
 
+	// TODO: Add DRDY interrupt code
+
 	return m, nil
 }
+
+// TODO: Implement fault register polling. The board that I have has the FAULT pin hardwired to an LED. I need to be certain that waiting for data from the chip will not end in a deadlock. It might be prudent to add a timeout.
 
 // Reset the faults register
 func (m *MAX31856) ResetFaults() {
@@ -67,14 +71,22 @@ func (m *MAX31856) ResetFaults() {
 }
 
 // Intended to be placed into a Goroutine
-// Singleton behavior
 func (m *MAX31856) GetTempAuto() {
+	// Todo: Implement an output channel for data and an input channel to exit or perform flow control
 
+	// Step 1: Set up the chip for auto-capture
+	// Step 2: Wait for DRDY interrupt
+	// Step 3: Push new data onto the channel
+	// Step 4: Unset the auto-capture
 }
 
 // Intended to be called once per measurement
 func (m *MAX31856) GetTempOnce() {
-
+	// Step 1: Request temperature
+	// Step 2: Wait for DRDY interrupt
+	// Step 3: Get data off SPI bus
+	// Step 4: Check for faults ?
+	// Step 5: Return data
 }
 
 // Internal function to get temperature. Return a float32 containing the temperature in degrees centigrade.
