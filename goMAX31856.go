@@ -21,65 +21,44 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-//package goMAX31856
-package main
+package goMAX31856
 
 import (
-	"fmt"
-	"time"
+	//"sync"
+
 	"github.com/the-sibyl/piSPI"
 )
 
-func main() {
+
+type MAX31856 struct {
+	dev *spi.Device
+	spidevPath string
+	spiClockSpeed int64
+}
+
+// Add functionality for DRDY pin
+func Setup(spidevPath string, spiClockSpeed int64) (MAX31856, error) {
+
+	m := MAX31856{
+		spidevPath: spidevPath,
+		spiClockSpeed: spiClockSpeed,
+	}
 
 	o := spi.Devfs{
-		Dev:	"/dev/spidev0.0",
+		Dev:	m.spidevPath,
 		Mode:	spi.Mode1,
-		MaxSpeed: 100000,
+		MaxSpeed: m.spiClockSpeed,
 	}
 
 	dev, err := spi.Open(&o)
 
 	if err != nil {
-		panic(err)
+		return m, err
 	}
 
-	defer dev.Close()
+	m.dev = dev
 
-	dev.SetCSChange(false)
-	time.Sleep(time.Millisecond * 200)
-
-
-	//readValue := make([]byte, 2)
-
-	err = dev.Tx([]byte{
-		0x80, 0xB4,
-	}, nil)
-
-	if err != nil {
-		panic(err)
-	}
-
-	err = dev.Tx([]byte{
-		0x82, 0x0,
-	}, nil)
-
-	if err != nil {
-		panic(err)
-	}
-
-	getTemp(dev)
-
-}
-
-type MAX31856 struct {
-	spidevPath string
-	spiClockSpeed int
-}
-
-// Add functionality for DRDY pin
-func (m *MAX31856) Setup() {
-
+	return m, nil
 }
 
 // Reset the faults register
@@ -98,7 +77,8 @@ func (m *MAX31856) GetTempOnce() {
 
 }
 
-func getTemp(dev *spi.Device) {
+// Internal function to get temperature. Return a float32 containing the temperature in degrees centigrade.
+func getTemp(dev *spi.Device) float32 {
 
 	readValue := make([]byte, 4)
 
@@ -107,14 +87,10 @@ func getTemp(dev *spi.Device) {
 	0xC, 0x0, 0x0, 0x0,
 	}, readValue)
 
-	// Discard the first byte, save the rest, and shift them to their proper positions
-	//temp := int32(readValue[1]) << 16 | int32(readValue[2]) << 8 | int32(readValue[3])
+	// Discard the first byte, save the rest, and shift them to their proper positions. The data are in two's
+	// complement, and the math here works out nicely.
 	temp := int16(readValue[1]) << 8 | int16(readValue[2])
 	linearTempDegC := float32(temp) * 0.0625
-	fmt.Println("Processed temperature:", linearTempDegC)
 
-	// Note: from the datasheet, the output looks like two's complement. Check to be sure that the signed math works out. Extend the sign out to 32 bits if necessary.
-	fmt.Println(readValue)
-	fmt.Println(temp)
-
+	return linearTempDegC
 }
