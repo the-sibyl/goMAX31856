@@ -65,6 +65,38 @@ func Setup(spidevPath string, spiClockSpeed int64) (MAX31856, error) {
 
 // TODO: Implement fault register polling. The board that I have has the FAULT pin hardwired to an LED. I need to be certain that waiting for data from the chip will not end in a deadlock. It might be prudent to add a timeout.
 
+type FaultFlags struct {
+	CJRange bool
+	TCRange bool
+	CJHIGH bool
+	CJLOW bool
+	TCHIGH bool
+	TCLOW bool
+	OVUV bool
+	OPEN bool
+	NoFaults bool
+}
+// Read from the Fault Status Register
+func (m *MAX31856) CheckForFaults() FaultFlags {
+	readValue := make([]byte, 2)
+
+	// Read a byte at register 0xF
+	m.dev.Tx([]byte{
+	0xF, 0x0,
+	}, readValue)
+
+	// Discard the first byte
+	faults := readValue[1]
+
+	var faultFlags FaultFlags
+
+	if faults & 128  != 0 {
+		faultFlags.CJRange = true
+	}
+
+	return faultFlags
+}
+
 // Reset the faults register
 func (m *MAX31856) ResetFaults() {
 
@@ -73,7 +105,7 @@ func (m *MAX31856) ResetFaults() {
 // Intended to be placed into a Goroutine
 func (m *MAX31856) GetTempAuto() {
 	// Todo: Implement an output channel for data and an input channel to exit or perform flow control
-
+	
 	// Step 1: Set up the chip for auto-capture
 	// Step 2: Wait for DRDY interrupt
 	// Step 3: Push new data onto the channel
@@ -81,21 +113,23 @@ func (m *MAX31856) GetTempAuto() {
 }
 
 // Intended to be called once per measurement
-func (m *MAX31856) GetTempOnce() {
+func (m *MAX31856) GetTempOnce() float32 {
 	// Step 1: Request temperature
+	temperature := m.getTemp()
 	// Step 2: Wait for DRDY interrupt
 	// Step 3: Get data off SPI bus
 	// Step 4: Check for faults ?
 	// Step 5: Return data
+	return temperature
 }
 
 // Internal function to get temperature. Return a float32 containing the temperature in degrees centigrade.
-func getTemp(dev *spi.Device) float32 {
+func (m *MAX31856) getTemp() float32 {
 
 	readValue := make([]byte, 4)
 
 	// Read 0xC, 0xD, 0xE. The address auto-increments on the chip.
-	dev.Tx([]byte{
+	m.dev.Tx([]byte{
 	0xC, 0x0, 0x0, 0x0,
 	}, readValue)
 
