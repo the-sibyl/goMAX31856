@@ -1,4 +1,4 @@
-package goMAX31856
+package max31856
 
 import (
 	"github.com/mvpninjas/go-bitflag"

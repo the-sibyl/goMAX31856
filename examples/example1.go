@@ -24,48 +24,22 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 package main
 
 import (
+	"fmt"
 	"time"
 	"github.com/the-sibyl/goMAX31856"
 )
 
 func main() {
+	var spiClockSpeed int64 = 100000
+	devPathCh0 := "/dev/spidev0.0"
+	timeoutPeriod := time.Second
 
-	o := spi.Devfs{
-		Dev:	"/dev/spidev0.0",
-		Mode:	spi.Mode1,
-		MaxSpeed: 100000,
-	}
-
-	dev, err := spi.Open(&o)
+	ch0, err := max31856.Setup(devPathCh0, spiClockSpeed, timeoutPeriod)
 
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
 
-	defer dev.Close()
-
-	dev.SetCSChange(false)
-	time.Sleep(time.Millisecond * 200)
-
-
-	//readValue := make([]byte, 2)
-
-	err = dev.Tx([]byte{
-		0x80, 0xB4,
-	}, nil)
-
-	if err != nil {
-		panic(err)
-	}
-
-	err = dev.Tx([]byte{
-		0x82, 0x0,
-	}, nil)
-
-	if err != nil {
-		panic(err)
-	}
-
-	getTemp(dev)
-
+	temperature, _ := ch0.GetTempOnce()
+	fmt.Println(temperature)
 }
