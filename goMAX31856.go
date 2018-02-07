@@ -25,6 +25,9 @@ package goMAX31856
 
 import (
 	//"sync"
+	"errors"
+	"time"
+	"fmt"
 
 	"github.com/the-sibyl/piSPI"
 	"github.com/mvpninjas/go-bitflag"
@@ -35,14 +38,16 @@ type MAX31856 struct {
 	dev *spi.Device
 	spidevPath string
 	spiClockSpeed int64
+	drdyTimeoutPeriod time.Duration
 }
 
 // Add functionality for DRDY pin
-func Setup(spidevPath string, spiClockSpeed int64) (MAX31856, error) {
+func Setup(spidevPath string, spiClockSpeed int64, drdyTimeoutPeriod time.Duration) (MAX31856, error) {
 
 	m := MAX31856{
 		spidevPath: spidevPath,
 		spiClockSpeed: spiClockSpeed,
+		drdyTimeoutPeriod: drdyTimeoutPeriod,
 	}
 
 	o := spi.Devfs{
@@ -98,20 +103,35 @@ func (m *MAX31856) GetTempAuto() {
 }
 
 // Intended to be called once per measurement
-func (m *MAX31856) GetTempOnce() float32 {
+func (m *MAX31856) GetTempOnce() (float32, error) {
 	// Step 1: Request temperature
-	temperature := m.getTemp()
+	temperature, err := m.getTemp()
 	// Step 2: Wait for DRDY interrupt
 	// Step 3: Get data off SPI bus
 	// Step 4: Check for faults ?
 	// Step 5: Return data
-	return temperature
+	return temperature, err
 }
 
 // Internal function to get temperature. Return a float32 containing the temperature in degrees centigrade.
-func (m *MAX31856) getTemp() float32 {
+func (m *MAX31856) getTemp() (float32, error) {
 
 	readValue := make([]byte, 4)
+
+	dataReady := make(chan bool, 1)
+
+	// Wait for the DRDY bit to go high
+	go func() {
+		dataReady <- true
+	}()
+
+	select {
+		case <-time.After(m.drdyTimeoutPeriod):
+			return 0, errors.New("Timeout Error")
+		case <-dataReady:
+			fmt.Println("Data is ready")
+	}
+
 
 	// Read 0xC, 0xD, 0xE. The address auto-increments on the chip.
 	m.dev.Tx([]byte{
@@ -123,5 +143,5 @@ func (m *MAX31856) getTemp() float32 {
 	temp := int16(readValue[1]) << 8 | int16(readValue[2])
 	linearTempDegC := float32(temp) * 0.0625
 
-	return linearTempDegC
+	return linearTempDegC, nil
 }
