@@ -27,6 +27,7 @@ import (
 	//"sync"
 
 	"github.com/the-sibyl/piSPI"
+	"github.com/mvpninjas/go-bitflag"
 )
 
 
@@ -65,19 +66,9 @@ func Setup(spidevPath string, spiClockSpeed int64) (MAX31856, error) {
 
 // TODO: Implement fault register polling. The board that I have has the FAULT pin hardwired to an LED. I need to be certain that waiting for data from the chip will not end in a deadlock. It might be prudent to add a timeout.
 
-type FaultFlags struct {
-	CJRange bool
-	TCRange bool
-	CJHIGH bool
-	CJLOW bool
-	TCHIGH bool
-	TCLOW bool
-	OVUV bool
-	OPEN bool
-	NoFaults bool
-}
+
 // Read from the Fault Status Register
-func (m *MAX31856) CheckForFaults() FaultFlags {
+func (m *MAX31856) CheckForFaults() bitflag.Flag {
 	readValue := make([]byte, 2)
 
 	// Read a byte at register 0xF
@@ -88,13 +79,7 @@ func (m *MAX31856) CheckForFaults() FaultFlags {
 	// Discard the first byte
 	faults := readValue[1]
 
-	var faultFlags FaultFlags
-
-	if faults & 128  != 0 {
-		faultFlags.CJRange = true
-	}
-
-	return faultFlags
+	return bitflag.Flag(faults)
 }
 
 // Reset the faults register
