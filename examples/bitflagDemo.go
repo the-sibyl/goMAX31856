@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"reflect"
 	"github.com/mvpninjas/go-bitflag"
+	"reflect"
 )
 
 // Bit fields for register 0x0F: Fault Status Register

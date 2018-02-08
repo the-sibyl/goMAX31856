@@ -26,18 +26,17 @@ package max31856
 import (
 	//"sync"
 	"errors"
-	"time"
 	"fmt"
+	"time"
 
-	"github.com/the-sibyl/piSPI"
 	"github.com/mvpninjas/go-bitflag"
+	"github.com/the-sibyl/piSPI"
 )
 
-
 type MAX31856 struct {
-	dev *spi.Device
-	spidevPath string
-	spiClockSpeed int64
+	dev               *spi.Device
+	spidevPath        string
+	spiClockSpeed     int64
 	drdyTimeoutPeriod time.Duration
 }
 
@@ -45,18 +44,18 @@ type MAX31856 struct {
 func Setup(spidevPath string, spiClockSpeed int64, drdyTimeoutPeriod time.Duration) (MAX31856, error) {
 
 	m := MAX31856{
-		spidevPath: spidevPath,
-		spiClockSpeed: spiClockSpeed,
+		spidevPath:        spidevPath,
+		spiClockSpeed:     spiClockSpeed,
 		drdyTimeoutPeriod: drdyTimeoutPeriod,
 	}
 
 	o := spi.Devfs{
-		Dev:	m.spidevPath,
-		Mode:	spi.Mode1,
+		Dev:      m.spidevPath,
+		Mode:     spi.Mode1,
 		MaxSpeed: m.spiClockSpeed,
 	}
 
-// TOOD: implement closing for this
+	// TOOD: implement closing for this
 
 	dev, err := spi.Open(&o)
 
@@ -88,37 +87,12 @@ func Setup(spidevPath string, spiClockSpeed int64, drdyTimeoutPeriod time.Durati
 	return m, nil
 }
 
-
-
-
 // TODO: Implement fault register polling. The board that I have has the FAULT pin hardwired to an LED. I need to be certain that waiting for data from the chip will not end in a deadlock. It might be prudent to add a timeout.
-
-
-// Read from the Fault Status Register and return a simple binary result
-func (m *MAX31856) CheckForFaults() (bool, error) {
-	faultFlags, err := m.GetFlags(SR_RD)
-	fault := faultFlags != 0
-	return fault, err
-}
-
-// Reset the faults register
-func (m *MAX31856) ResetFaults() error {
-	// Read the CR0 register
-	cr0, err := m.GetFlags(CR0_RD)
-	if err != nil {
-		return err
-	}
-	// Set the FAULTCLR bit in CR0
-	cr0.Set(FAULTCLR)
-	// Write back out to CR0
-	err = m.SetFlags(CR0_WR, cr0)
-	return err
-}
 
 // Intended to be placed into a Goroutine
 func (m *MAX31856) GetTempAuto() {
 	// Todo: Implement an output channel for data and an input channel to exit or perform flow control
-	
+
 	// Step 1: Set up the chip for auto-capture
 	// Step 2: Wait for DRDY interrupt
 	// Step 3: Push new data onto the channel
@@ -148,28 +122,49 @@ func (m *MAX31856) getTemp() (float32, error) {
 		dataReady <- true
 	}()
 
+	// TODO: Add code to actually check for DRDY. It is bypassed here.
 	select {
-		case <-time.After(m.drdyTimeoutPeriod):
-			return 0, errors.New("Timeout Error")
-		case <-dataReady:
-			fmt.Println("Data is ready")
+	case <-time.After(m.drdyTimeoutPeriod):
+		return 0, errors.New("Timeout Error")
+	case <-dataReady:
+		fmt.Println("Data is ready")
 	}
 
 	m.dev.SetCSChange(false)
 
 	// Read 0xC, 0xD, 0xE. The address auto-increments on the chip.
 	m.dev.Tx([]byte{
-	0xC, 0x0, 0x0, 0x0,
+		0xC, 0x0, 0x0, 0x0,
 	}, readValue)
 
 	// Discard the first byte, save the rest, and shift them to their proper positions. The data are in two's
 	// complement, and the math here works out nicely.
-	temp := int16(readValue[1]) << 8 | int16(readValue[2])
+	temp := int16(readValue[1])<<8 | int16(readValue[2])
 	linearTempDegC := float32(temp) * 0.0625
 
 	return linearTempDegC, nil
 }
 
+// Read from the Fault Status Register and return a simple binary result
+func (m *MAX31856) CheckForFaults() (bool, error) {
+	faultFlags, err := m.GetFlags(SR_RD)
+	fault := faultFlags != 0
+	return fault, err
+}
+
+// Reset the faults register
+func (m *MAX31856) ResetFaults() error {
+	// Read the CR0 register
+	cr0, err := m.GetFlags(CR0_RD)
+	if err != nil {
+		return err
+	}
+	// Set the FAULTCLR bit in CR0
+	cr0.Set(FAULTCLR)
+	// Write back out to CR0
+	err = m.SetFlags(CR0_WR, cr0)
+	return err
+}
 
 // Write to a register using a bitflag.Flag type for convenience
 func (m *MAX31856) SetFlags(address byte, value bitflag.Flag) error {
@@ -186,7 +181,6 @@ func (m *MAX31856) SetFlags(address byte, value bitflag.Flag) error {
 	return nil
 }
 
-
 // Get register values and store them in a bitflag.Flag type for convenience
 func (m *MAX31856) GetFlags(address byte) (bitflag.Flag, error) {
 	if address >= 0x80 && address <= 0x8B {
@@ -200,5 +194,3 @@ func (m *MAX31856) GetFlags(address byte) (bitflag.Flag, error) {
 
 	return bitflag.Flag(readValue[1]), nil
 }
-
-

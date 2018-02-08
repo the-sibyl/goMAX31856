@@ -25,8 +25,8 @@ package main
 
 import (
 	"fmt"
-	"time"
 	"github.com/the-sibyl/goMAX31856"
+	"time"
 )
 
 func main() {

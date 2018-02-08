@@ -63,4 +63,3 @@ const (
 	TCRange
 	CJRange
 )
-
