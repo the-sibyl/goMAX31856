@@ -40,6 +40,8 @@ func main() {
 		fmt.Println(err)
 	}
 
+	fmt.Println(max31856.CJLF_WR)
+
 	temperature, _ := ch0.GetTempOnce()
 	fmt.Println(temperature)
 }

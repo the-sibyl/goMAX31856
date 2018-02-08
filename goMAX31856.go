@@ -56,6 +56,8 @@ func Setup(spidevPath string, spiClockSpeed int64, drdyTimeoutPeriod time.Durati
 		MaxSpeed: m.spiClockSpeed,
 	}
 
+// TOOD: implement closing for this
+
 	dev, err := spi.Open(&o)
 
 	if err != nil {
@@ -64,10 +66,30 @@ func Setup(spidevPath string, spiClockSpeed int64, drdyTimeoutPeriod time.Durati
 
 	m.dev = dev
 
+	var cr0 bitflag.Flag
+	cr0.Set(CMODE)
+	cr0.Set(OCFAULT0)
+	cr0.Set(OCFAULT1)
+
+	m.SetFlags(CR0_WR, cr0)
+
+	// Get default values from the register
+	mask, err := m.GetFlags(MASK_RD)
+	if err != nil {
+		return m, err
+	}
+	// Masks are active low. Unset the flags for the signals that need to be considered as faults.
+	mask.Unset(OPEN)
+	mask.Unset(OVUV)
+	m.SetFlags(MASK_WR, mask)
+
 	// TODO: Add DRDY interrupt code
 
 	return m, nil
 }
+
+
+
 
 // TODO: Implement fault register polling. The board that I have has the FAULT pin hardwired to an LED. I need to be certain that waiting for data from the chip will not end in a deadlock. It might be prudent to add a timeout.
 
@@ -132,6 +154,7 @@ func (m *MAX31856) getTemp() (float32, error) {
 			fmt.Println("Data is ready")
 	}
 
+	m.dev.SetCSChange(false)
 
 	// Read 0xC, 0xD, 0xE. The address auto-increments on the chip.
 	m.dev.Tx([]byte{
@@ -145,3 +168,36 @@ func (m *MAX31856) getTemp() (float32, error) {
 
 	return linearTempDegC, nil
 }
+
+
+// Write to a register using a bitflag.Flag type for convenience
+func (m *MAX31856) SetFlags(address byte, value bitflag.Flag) error {
+	if address < 0x80 || address > 0x8B {
+		return errors.New("Invalid write address")
+	}
+
+	m.dev.SetCSChange(false)
+	m.dev.Tx([]byte{address, byte(value)}, nil)
+
+	fmt.Println([]byte{address, byte(value)})
+	fmt.Println("Writing config")
+
+	return nil
+}
+
+
+// Get register values and store them in a bitflag.Flag type for convenience
+func (m *MAX31856) GetFlags(address byte) (bitflag.Flag, error) {
+	if address >= 0x80 && address <= 0x8B {
+		return 0, errors.New("Invalid read address")
+	}
+
+	readValue := make([]byte, 2)
+
+	m.dev.SetCSChange(false)
+	m.dev.Tx([]byte{address, byte(0)}, readValue)
+
+	return bitflag.Flag(readValue[1]), nil
+}
+
+
