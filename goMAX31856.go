@@ -94,24 +94,25 @@ func Setup(spidevPath string, spiClockSpeed int64, drdyTimeoutPeriod time.Durati
 // TODO: Implement fault register polling. The board that I have has the FAULT pin hardwired to an LED. I need to be certain that waiting for data from the chip will not end in a deadlock. It might be prudent to add a timeout.
 
 
-// Read from the Fault Status Register
-func (m *MAX31856) CheckForFaults() bitflag.Flag {
-	readValue := make([]byte, 2)
-
-	// Read a byte at register 0xF
-	m.dev.Tx([]byte{
-	0xF, 0x0,
-	}, readValue)
-
-	// Discard the first byte
-	faults := readValue[1]
-
-	return bitflag.Flag(faults)
+// Read from the Fault Status Register and return a simple binary result
+func (m *MAX31856) CheckForFaults() (bool, error) {
+	faultFlags, err := m.GetFlags(SR_RD)
+	fault := faultFlags != 0
+	return fault, err
 }
 
 // Reset the faults register
-func (m *MAX31856) ResetFaults() {
-
+func (m *MAX31856) ResetFaults() error {
+	// Read the CR0 register
+	cr0, err := m.GetFlags(CR0_RD)
+	if err != nil {
+		return err
+	}
+	// Set the FAULTCLR bit in CR0
+	cr0.Set(FAULTCLR)
+	// Write back out to CR0
+	err = m.SetFlags(CR0_WR, cr0)
+	return err
 }
 
 // Intended to be placed into a Goroutine
