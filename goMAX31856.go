@@ -31,6 +31,7 @@ import (
 
 	"github.com/mvpninjas/go-bitflag"
 	"github.com/the-sibyl/piSPI"
+	"github.com/the-sibyl/sysfsGPIO"
 )
 
 type MAX31856 struct {
@@ -41,7 +42,9 @@ type MAX31856 struct {
 }
 
 // Add functionality for DRDY pin
-func Setup(spidevPath string, spiClockSpeed int64, drdyTimeoutPeriod time.Duration) (MAX31856, error) {
+func Setup(spidevPath string, spiClockSpeed int64, drdyPin int, drdyTimeoutPeriod time.Duration) (MAX31856, error) {
+
+	
 
 	m := MAX31856{
 		spidevPath:        spidevPath,
@@ -83,6 +86,15 @@ func Setup(spidevPath string, spiClockSpeed int64, drdyTimeoutPeriod time.Durati
 	m.SetFlags(MASK_WR, mask)
 
 	// TODO: Add DRDY interrupt code
+
+	drdy, err := sysfsGPIO.InitPin(drdyPin, "in")
+	if err != nil {
+		return m, err
+	}
+	drdy.SetTriggerEdge("rising")
+	drdy.AddPinInterrupt()
+
+	// Do SOMETHING with the ISR........need to think this out!
 
 	return m, nil
 }
