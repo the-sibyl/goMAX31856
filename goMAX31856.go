@@ -25,12 +25,13 @@ package max31856
 
 import (
 	//"sync"
+	"context"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/mvpninjas/go-bitflag"
-	"github.com/the-sibyl/piSPI"
+	bitflag "github.com/mvpninjas/go-bitflag"
+	spi "github.com/the-sibyl/piSPI"
 	"github.com/the-sibyl/sysfsGPIO"
 )
 
@@ -41,10 +42,8 @@ type MAX31856 struct {
 	drdyTimeoutPeriod time.Duration
 }
 
-// Add functionality for DRDY pin
-func Setup(spidevPath string, spiClockSpeed int64, drdyPin int, drdyTimeoutPeriod time.Duration) (MAX31856, error) {
-
-	
+//SetupDRDY Add functionality for DRDY pin
+func SetupDRDY(spidevPath string, spiClockSpeed int64, drdyPin int, drdyTimeoutPeriod time.Duration) (MAX31856, error) {
 
 	m := MAX31856{
 		spidevPath:        spidevPath,
@@ -99,16 +98,78 @@ func Setup(spidevPath string, spiClockSpeed int64, drdyPin int, drdyTimeoutPerio
 	return m, nil
 }
 
+//Setup no DRDY
+func Setup(spidevPath string, spiClockSpeed int64) (MAX31856, error) {
+
+	m := MAX31856{
+		spidevPath:    spidevPath,
+		spiClockSpeed: spiClockSpeed,
+	}
+
+	o := spi.Devfs{
+		Dev:      m.spidevPath,
+		Mode:     spi.Mode1,
+		MaxSpeed: m.spiClockSpeed,
+	}
+
+	// TOOD: implement closing for this
+
+	dev, err := spi.Open(&o)
+
+	if err != nil {
+		return m, err
+	}
+
+	m.dev = dev
+
+	var cr0 bitflag.Flag
+	cr0.Set(CMODE)
+	cr0.Set(OCFAULT0)
+	cr0.Set(OCFAULT1)
+
+	m.SetFlags(CR0_WR, cr0)
+
+	// Get default values from the register
+	mask, err := m.GetFlags(MASK_RD)
+	if err != nil {
+		return m, err
+	}
+	// Masks are active low. Unset the flags for the signals that need to be considered as faults.
+	mask.Unset(OPEN)
+	mask.Unset(OVUV)
+	m.SetFlags(MASK_WR, mask)
+
+	// Do SOMETHING with the ISR........need to think this out!
+
+	return m, nil
+}
+
 // TODO: Implement fault register polling. The board that I have has the FAULT pin hardwired to an LED. I need to be certain that waiting for data from the chip will not end in a deadlock. It might be prudent to add a timeout.
 
-// Intended to be placed into a Goroutine
-func (m *MAX31856) GetTempAuto() {
-	// Todo: Implement an output channel for data and an input channel to exit or perform flow control
-
-	// Step 1: Set up the chip for auto-capture
-	// Step 2: Wait for DRDY interrupt
-	// Step 3: Push new data onto the channel
-	// Step 4: Unset the auto-capture
+// GetTempAuto take a context and send temperature data over the defined interval(seconds) back to the caller
+func (m *MAX31856) GetTempAuto(ctx context.Context, interval int32) (chan float32, error) {
+	dataChannel := make(chan float32, 10)
+	tick := time.Tick(time.Duration(interval) * time.Second)
+	temperature, err := m.getTemp()
+	if err != nil {
+		return nil, err
+	}
+	dataChannel <- temperature
+	go func(data chan float32) error { //Start anonymous function to keep running until context is cancelled
+		for {
+			select {
+			case <-tick:
+				temperature, err := m.getTemp()
+				if err != nil {
+					return err
+				}
+				data <- temperature
+			case <-ctx.Done():
+				close(dataChannel)
+			}
+		}
+	}(dataChannel)
+	return dataChannel, nil
 }
 
 // Intended to be called once per measurement
